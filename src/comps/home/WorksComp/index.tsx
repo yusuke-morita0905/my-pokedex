@@ -1,10 +1,9 @@
 import React, { useEffect, useState, ReactElement } from 'react';
 import styled, { css } from 'styled-components';
-import { ShowImage } from '@/modules/lib';
 import { ChakraProvider } from '@chakra-ui/react';
 import axios from 'axios';
-import { MainClient } from 'pokenode-ts';
-import { Box, Center, Image, Flex, Badge, Text } from '@chakra-ui/react';
+import { MainClient, GameClient, POKEDEXES } from 'pokenode-ts';
+import { Card, CardHeader, Image, CardBody, CardFooter, Stack, Heading, Text, Button, Divider, ButtonGroup } from '@chakra-ui/react';
 
 type Props = {
   isSp: boolean;
@@ -25,63 +24,42 @@ type Pokemon = {
 
 export const PictureBookComp: React.FC<Props> = (p) => {
   const isSp: boolean = p.isSp;
-  const [pokemonData, setPokemonData] = useState<Pokemon>({
-    id: 0,
-    name: '',
-    front_default: '',
-    front_shiny: '',
-    taxonomy: '',
-    type: '',
-    height: 0,
-    weight: 0,
-    property: '',
-    flavor_text: '',
-  });
+  const [allPokemons, setAllPokemons] = useState([]);
+
+  const createPokemonObject = (results) => {
+    results.forEach((pokemon) => {
+      fetch(pokemon.pokemon_species.url)
+        .then((res) => res.json())
+        .then(async (data) => {
+          const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${data.id}`);
+          const pokemonList = await response.json();
+          const name: string = data.names.find((v: { language: { name: string } }) => v.language.name === 'ja')['name'];
+          const genus: string = data.genera[0].genus;
+
+          const newList = {
+            id: pokemonList.id,
+            name: name,
+            type: genus,
+            image: pokemonList.sprites.other['official-artwork'].front_default,
+            imageShiny: pokemonList.sprites.other['official-artwork'].front_shiny,
+          };
+          setAllPokemons((currentList) => [...currentList, newList]);
+        });
+    });
+  };
 
   useEffect(() => {
     (async () => {
-      const api = new MainClient();
+      const gameApi = new GameClient();
 
-      try {
-        const index = Math.floor(Math.random() * 1025 + 1);
-        const dataPromise = api.pokemon.getPokemonById(index);
-        const speciesPromise = axios.get(`https://pokeapi.co/api/v2/pokemon-species/${index}`);
-        const [data, responseSpecies] = await Promise.all([dataPromise, speciesPromise]);
-
-        console.log(data);
-        console.log(responseSpecies);
-
-        const name: string = responseSpecies.data.names.find((v: { language: { name: string } }) => v.language.name === 'ja')['name'];
-        const type: string = responseSpecies.data.genera.find(
-          (v: { language: { name: string } }) => v.language.name === 'ja-Hrkt' || v.language.name === 'ko'
-        )['genus'];
-        let flavorTextEntry = responseSpecies.data.flavor_text_entries.find((v: { language: { name: string } }) => v.language.name === 'ja');
-
-        if (!flavorTextEntry) {
-          flavorTextEntry = responseSpecies.data.flavor_text_entries.find((v) => v.language.name === 'en');
-        }
-
-        const flavorText = flavorTextEntry ? flavorTextEntry.flavor_text : 'Default flavor text if neither "ja" nor "en" is found';
-        console.log(flavorText);
-
-        setPokemonData({
-          id: index,
-          name: name,
-          type: type,
-          taxonomy: '',
-          property: '',
-          height: data['height'],
-          weight: data['weight'],
-          front_default: data['sprites']['other']['official-artwork']['front_default'],
-          front_shiny: data['sprites']['other']['official-artwork']['front_shiny'],
-          flavor_text: flavorText,
-        });
-      } catch (error) {
-        console.error(error);
-        throw error;
-      }
+      await gameApi
+        .getPokedexById(POKEDEXES.KANTO)
+        .then((data) => createPokemonObject(data.pokemon_entries))
+        .catch((error) => console.error(error));
     })();
   }, []);
+
+  console.log(allPokemons);
 
   return (
     <ChakraProvider>
@@ -90,82 +68,52 @@ export const PictureBookComp: React.FC<Props> = (p) => {
         $isSp={isSp}
       >
         <Title $isSp={isSp}>Pokemon</Title>
-        {pokemonData.id !== 0 && (
-          <Center h='100vh'>
-            <Box
-              p='5'
-              maxW='320px'
-              borderWidth='1px'
+        <Wrap>
+          {allPokemons.map((v, i) => (
+            <Card
+              maxW='sm'
+              key={i}
             >
-              <Image
-                w='278px'
-                h='278px'
-                borderRadius='md'
-                m='auto'
-                src={pokemonData.front_default}
-              />
-              <Image
-                w='278px'
-                h='278px'
-                borderRadius='md'
-                m='auto'
-                src={pokemonData.front_shiny}
-              />
-              <Flex
-                align='baseline'
-                mt={2}
-              >
-                <Badge colorScheme='pink'>{pokemonData.type}</Badge>
-                <Text
-                  ml={2}
-                  textTransform='uppercase'
-                  fontSize='sm'
-                  fontWeight='bold'
-                  color='pink.800'
+              <CardBody>
+                <Image
+                  src={v.image}
+                  alt=''
+                />
+                <Image
+                  src={v.imageShiny}
+                  alt=''
+                />
+                <Stack
+                  mt='6'
+                  spacing='3'
                 >
-                  {pokemonData.name}
-                </Text>
-              </Flex>
-              <Text>{pokemonData.flavor_text}</Text>
-              <Flex
-                mt={2}
-                align='center'
-              >
-                <Text fontSize='sm'>
-                  <b>高さ</b> {pokemonData.height / 10} m<b>重さ</b> {pokemonData.weight / 10} kg
-                </Text>
-              </Flex>
-            </Box>
-          </Center>
-        )}
+                  <Heading size='md'>{v.name}</Heading>
+                  <Text>{v.type}</Text>
+                </Stack>
+              </CardBody>
+              <Divider />
+              <CardFooter>
+                <ButtonGroup spacing='2'>
+                  <Button
+                    variant='solid'
+                    colorScheme='blue'
+                  >
+                    Buy now
+                  </Button>
+                  <Button
+                    variant='ghost'
+                    colorScheme='blue'
+                  >
+                    Add to cart
+                  </Button>
+                </ButtonGroup>
+              </CardFooter>
+            </Card>
+          ))}
+        </Wrap>
       </Container>
     </ChakraProvider>
   );
-};
-
-const findProperty = (obj, key) => {
-  // ベースケース：objがnullまたはオブジェクトでない場合、undefinedを返す
-  if (obj === null || typeof obj !== 'object') {
-    return undefined;
-  }
-
-  // ベースケース：オブジェクトが指定されたキーを持っている場合、その値を返す
-  if (obj.hasOwnProperty(key)) {
-    return obj[key];
-  }
-
-  // 再帰ケース：各プロパティについて再帰的に検索
-  for (const k in obj) {
-    if (obj.hasOwnProperty(k)) {
-      const result = findProperty(obj[k], key);
-      if (result !== undefined) {
-        return result;
-      }
-    }
-  }
-
-  // プロパティが見つからなかった場合、undefinedを返す
-  return undefined;
 };
 
 const Container = styled.section<{ $isSp: boolean }>`
@@ -203,4 +151,10 @@ const Title = styled.h2<{ $isSp: boolean }>`
     margin-left: ${(p) => (p.$isSp ? '12vw' : '3vw')};
     transform: rotate(10deg);
   }
+`;
+
+const Wrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 90px;
 `;
