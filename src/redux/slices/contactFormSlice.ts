@@ -5,7 +5,7 @@ interface State {
 }
 
 const initialState: State = {
-  email: 'yusuke.morita0905@gmail.com',
+  email: '',
 };
 
 export const contactFormSlice = createSlice({
